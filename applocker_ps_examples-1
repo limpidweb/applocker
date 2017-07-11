@@ -1,0 +1,34 @@
+#These are just some examples of the main gears for interacting with AppLocker via PowerShell.
+#If you want to use it you will need to write more code to make this a functional script. 
+#This assumes AppLocker is being deployed via Group Policy Object (GPO) with Active Directory.
+#
+#Define the GPO that is being interacted with
+$testgpo = "LDAP://domain.example.com/CN={GUID-GOES-HERE},CN=Policies,CN=System,DC=domain,DC=example,DC=com"
+#
+#Get AppLocker event information from a server location (perhaps that has filtered forwarded logs).
+#The where-object allows searching based off of AppLocker events that match a condition, in this case a portion of the path.
+$event = Get-applockerfileinfomration -EventLog -logpath \\server\share\file.evtx | where-object {$_.path -like "*searchterm*"}
+#
+#Create a "candidate" AppLocker policy and saves it as a variable, which allows manipulation later.
+#Note: this is just an example, you will probably want to write logic to select which event in the case of multiple matches.
+#You will also probably want to change the type, user group, and prefix appropriately for your environment
+$prepolicy = $($event | New-AppLockerPolicy -RuleType Publisher -User AppropriateUser -RuleNamePrefix Prefix)
+#
+#Set different variables in the policy for publisher based rules:
+#Thanks to https://www.administrator.de/user/colinardo/ for the $null tip at https://www.administrator.de/frage/windows-10-build-1703-applocker-regel-powershell-anlegen-336693.html
+#Example Setting #1: Setting policy so there is no minimum version (lower than HighSection)
+$prepolicy.RuleCollections.PublisherConditions.BinaryVersionRange.LowSection=$null
+#
+#Example Setting #2: Setting policy so there is no maximum version (higher than LowSection)
+$prepolicy.RuleCollections.PublisherConditions.BinaryVersionRange.HighSection=$null
+#
+#To set the policy to allow for any version of the file, set both options to Null.
+#
+#Example Setting #3: Setting policy so any binary name will work
+$prepolicy.RuleCollections.PublisherConditions.BinaryName="*"
+#
+#Example Setting #4: To set the productname to anything
+$prepolicy.RuleCollections.PublisherConditions.ProductName="*"
+#
+#Once the desired configuration changes have been made, the policy can be merged to the current AD policy with the following:
+Set-AppLockerPolicy -PolicyObject $prepolicy -Merge -LDAP $testgpo
